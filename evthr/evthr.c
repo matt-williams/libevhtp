@@ -50,6 +50,7 @@ struct evthr {
     int             max_backlog;
     int             rdr;
     int             wdr;
+    char            started;
     char            err;
     ev_t          * event;
     evbase_t      * evbase;
@@ -316,8 +317,6 @@ evthr_new(evthr_init_cb init_cb, void * args) {
 
 int
 evthr_start(evthr_t * thread) {
-    int res;
-
     if (thread == NULL || thread->thr == NULL) {
         return -1;
     }
@@ -326,15 +325,19 @@ evthr_start(evthr_t * thread) {
         return -1;
     }
 
-    res = pthread_detach(*thread->thr);
+    thread->started = 1;
 
-    return res;
+    return 0;
 }
 
 void
 evthr_free(evthr_t * thread) {
     if (thread == NULL) {
         return;
+    }
+
+    if ((thread->thr) && (thread->started)) {
+        pthread_join(*thread->thr, NULL);
     }
 
     if (thread->rdr > 0) {
