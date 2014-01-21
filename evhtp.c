@@ -582,9 +582,7 @@ _evhtp_callback_find(evhtp_callbacks_t * cbs,
                      const char        * path,
                      unsigned int      * start_offset,
                      unsigned int      * end_offset) {
-#ifndef EVHTP_DISABLE_REGEX
     regmatch_t         pmatch[28];
-#endif
     evhtp_callback_t * callback;
 
     if (cbs == NULL) {
@@ -600,7 +598,6 @@ _evhtp_callback_find(evhtp_callbacks_t * cbs,
                     return callback;
                 }
                 break;
-#ifndef EVHTP_DISABLE_REGEX
             case evhtp_callback_type_regex:
                 if (regexec(callback->val.regex, path, callback->val.regex->re_nsub + 1, pmatch, 0) == 0) {
                     *start_offset = pmatch[callback->val.regex->re_nsub].rm_so;
@@ -610,7 +607,6 @@ _evhtp_callback_find(evhtp_callbacks_t * cbs,
                 }
 
                 break;
-#endif
             case evhtp_callback_type_glob:
                 if (_evhtp_glob_match(callback->val.glob, path) == 1) {
                     *start_offset = 0;
@@ -2845,7 +2841,6 @@ evhtp_callback_new(const char * path, evhtp_callback_type type, evhtp_callback_c
             hcb->hash      = _evhtp_quick_hash(path);
             hcb->val.path  = strdup(path);
             break;
-#ifndef EVHTP_DISABLE_REGEX
         case evhtp_callback_type_regex:
             hcb->val.regex = malloc(sizeof(regex_t));
 
@@ -2855,7 +2850,6 @@ evhtp_callback_new(const char * path, evhtp_callback_type type, evhtp_callback_c
                 return NULL;
             }
             break;
-#endif
         case evhtp_callback_type_glob:
             hcb->val.glob = strdup(path);
             break;
@@ -2880,12 +2874,10 @@ evhtp_callback_free(evhtp_callback_t * callback) {
         case evhtp_callback_type_glob:
             free(callback->val.glob);
             break;
-#ifndef EVHTP_DISABLE_REGEX
         case evhtp_callback_type_regex:
             regfree(callback->val.regex);
             free(callback->val.regex);
             break;
-#endif
     }
 
     if (callback->hooks) {
@@ -3111,7 +3103,6 @@ evhtp_use_callback_locks(evhtp_t * htp) {
 
 #endif
 
-#ifndef EVHTP_DISABLE_REGEX
 evhtp_callback_t *
 evhtp_set_regex_cb(evhtp_t * htp, const char * pattern, evhtp_callback_cb cb, void * arg) {
     evhtp_callback_t * hcb;
@@ -3142,7 +3133,6 @@ evhtp_set_regex_cb(evhtp_t * htp, const char * pattern, evhtp_callback_cb cb, vo
     return hcb;
 }
 
-#endif
 
 evhtp_callback_t *
 evhtp_set_glob_cb(evhtp_t * htp, const char * pattern, evhtp_callback_cb cb, void * arg) {

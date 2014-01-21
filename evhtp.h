@@ -8,9 +8,7 @@
 
 #include <htparse.h>
 
-#ifndef EVHTP_DISABLE_REGEX
-#include <onigposix.h>
-#endif
+#include <regex.h>
 
 #include <sys/queue.h>
 #include <event2/event.h>
@@ -113,9 +111,7 @@ enum evhtp_hook_type {
 
 enum evhtp_callback_type {
     evhtp_callback_type_hash,
-#ifndef EVHTP_DISABLE_REGEX
     evhtp_callback_type_regex,
-#endif
     evhtp_callback_type_glob
 };
 
@@ -317,9 +313,7 @@ struct evhtp_callback_s {
     union {
         char * path;
         char * glob;
-#ifndef EVHTP_DISABLE_REGEX
         regex_t * regex;
-#endif
     } val;
 
     TAILQ_ENTRY(evhtp_callback_s) next;
@@ -580,10 +574,7 @@ evhtp_callback_t * evhtp_set_cb(evhtp_t * htp, const char * path, evhtp_callback
  *
  * @return evhtp_callback_t * on success, NULL on error
  */
-#ifndef EVHTP_DISABLE_REGEX
 evhtp_callback_t * evhtp_set_regex_cb(evhtp_t * htp, const char * pattern, evhtp_callback_cb cb, void * arg);
-#endif
-
 
 
 /**
