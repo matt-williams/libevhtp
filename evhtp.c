@@ -3761,6 +3761,54 @@ evhtp_connection_set_rate_limit(evhtp_connection_t * conn,
     return bufferevent_set_rate_limit(conn->bev, tcfg);
 }
 
+int
+evhtp_get_remote_ip_port(evhtp_connection_t * conn, char * ip, size_t len, unsigned short * port) {
+    int rc;
+    socklen_t socklen;
+    struct sockaddr_storage addr;
+
+    socklen = sizeof(addr);
+    rc = getpeername(conn->sock, (struct sockaddr*)&addr, &socklen);
+
+    if (rc == 0) {
+        /* Deal with both IPv4 and IPv6 */
+        if (addr.ss_family == AF_INET) {
+            struct sockaddr_in *s = (struct sockaddr_in *)&addr;
+            *port = ntohs(s->sin_port);
+            rc = (inet_ntop(AF_INET, &s->sin_addr, ip, len) ? 0 : -1);
+        } else { /* AF_INET6 */
+            struct sockaddr_in6 *s = (struct sockaddr_in6 *)&addr;
+            *port = ntohs(s->sin6_port);
+            rc = (inet_ntop(AF_INET6, &s->sin6_addr, ip, len) ? 0 : -1);
+        }
+    }
+    return rc;
+}
+
+int
+evhtp_get_local_ip_port(evhtp_connection_t * conn, char * ip, size_t len, unsigned short * port) {
+    int rc;
+    socklen_t socklen;
+    struct sockaddr_storage addr;
+
+    socklen = sizeof(addr);
+    rc = getsockname(conn->sock, (struct sockaddr*)&addr, &socklen);
+
+    if (rc == 0) {
+        /* Deal with both IPv4 and IPv6 */
+        if (addr.ss_family == AF_INET) {
+            struct sockaddr_in *s = (struct sockaddr_in *)&addr;
+            *port = ntohs(s->sin_port);
+            rc = (inet_ntop(AF_INET, &s->sin_addr, ip, len) ? 0 : -1);
+        } else { /* AF_INET6 */
+            struct sockaddr_in6 *s = (struct sockaddr_in6 *)&addr;
+            *port = ntohs(s->sin6_port);
+            rc = (inet_ntop(AF_INET6, &s->sin6_addr, ip, len) ? 0 : -1);
+        }
+    }
+    return rc;
+}
+
 /*****************************************************************
 * client request functions                                      *
 *****************************************************************/

@@ -1088,6 +1088,28 @@ void evhtp_set_max_keepalive_requests(evhtp_t * htp, uint64_t num);
 int evhtp_connection_set_ratelimit(evhtp_connection_t * c, size_t read_rate,
     size_t read_burst, size_t write_rate, size_t write_burst, const struct timeval * tick);
 
+/**
+ * @brief Get a connection's remote IP address and port.
+ *
+ * @param conn   The connection in question.
+ * @param ip     Pointer to a buffer to store the IP address.
+ * @param len    Length of the IP address buffer.
+ * @param port   Pointer to where to store the port.
+ *
+ */
+int evhtp_get_remote_ip_port(evhtp_connection_t * conn, char * ip, size_t len, unsigned short * port);
+
+/**
+ * @brief Get a connection's local IP address and port.
+ *
+ * @param conn   The connection in question.
+ * @param ip     Pointer to a buffer to store the IP address.
+ * @param len    Length of the IP address buffer.
+ * @param port   Pointer to where to store the port.
+ *
+ */
+int evhtp_get_local_ip_port(evhtp_connection_t * conn, char * ip, size_t len, unsigned short * port);
+
 /*****************************************************************
 * client request functions                                      *
 *****************************************************************/
