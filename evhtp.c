@@ -238,6 +238,10 @@ static htparse_hooks request_psets = {
     .on_msg_complete    = _evhtp_request_parser_fini
 };
 
+const char   * END_OF_HEADER = "\r\n\r\n";
+const size_t   END_OF_HEADER_LEN = 4;
+
+
 #ifndef EVHTP_DISABLE_SSL
 static int             session_id_context    = 1;
 #ifndef EVHTP_DISABLE_EVTHR
@@ -636,13 +640,14 @@ _evhtp_request_new(evhtp_connection_t * c) {
         return NULL;
     }
 
-    req->conn        = c;
-    req->htp         = c ? c->htp : NULL;
-    req->status      = EVHTP_RES_OK;
-    req->buffer_in   = evbuffer_new();
-    req->buffer_out  = evbuffer_new();
-    req->headers_in  = malloc(sizeof(evhtp_headers_t));
-    req->headers_out = malloc(sizeof(evhtp_headers_t));
+    req->conn               = c;
+    req->htp                = c ? c->htp : NULL;
+    req->status             = EVHTP_RES_OK;
+    req->header_buffer_in   = evbuffer_new();
+    req->buffer_in          = evbuffer_new();
+    req->buffer_out         = evbuffer_new();
+    req->headers_in         = malloc(sizeof(evhtp_headers_t));
+    req->headers_out        = malloc(sizeof(evhtp_headers_t));
 
     TAILQ_INIT(req->headers_in);
     TAILQ_INIT(req->headers_out);
@@ -667,6 +672,9 @@ _evhtp_request_free(evhtp_request_t * request) {
     evhtp_headers_free(request->headers_in);
     evhtp_headers_free(request->headers_out);
 
+    if (request->header_buffer_in) {
+        evbuffer_free(request->header_buffer_in);
+    }
 
     if (request->buffer_in) {
         evbuffer_free(request->buffer_in);
@@ -1147,7 +1155,33 @@ _evhtp_request_parser_path(htparser * p, const char * data, size_t len) {
 
 static int
 _evhtp_request_parser_headers(htparser * p) {
-    evhtp_connection_t * c = htparser_get_userdata(p);
+    evhtp_connection_t  * c = htparser_get_userdata(p);
+    struct evbuffer_ptr   ptr;
+
+    /*
+     * Copy the header data from the connection to the request (making sure we
+     * actually have a complete header).
+     */
+    ptr = evbuffer_search(c->header_buffer_in, END_OF_HEADER, END_OF_HEADER_LEN, NULL);
+
+    if (ptr.pos >= 0) {
+        if (ptr.pos + END_OF_HEADER_LEN < evbuffer_get_length(c->header_buffer_in)) {
+            /*
+             * The header buffer contains more than just the header. This can
+             * happen when the end-of-header string (\r\n\r\n) crosses a packet
+             * boundary, as this prevents _evhtp_connection_writecb from
+             * spotting the end of the header.  Only copy the header data to the
+             * request.
+             */
+            evbuffer_remove_buffer(c->header_buffer_in,
+                                   c->request->header_buffer_in,
+                                   ptr.pos + END_OF_HEADER_LEN);
+        } else {
+            evbuffer_add_buffer(c->request->header_buffer_in,
+                                c->header_buffer_in);
+        }
+    }
+    c->header_complete = 1;
 
     /* XXX proto should be set with htparsers on_hdrs_begin hook */
     c->request->keepalive = htparser_should_keep_alive(p);
@@ -1450,6 +1484,7 @@ _evhtp_connection_readcb(evbev_t * bev, void * arg) {
     void               * buf;
     size_t               nread;
     size_t               avail;
+    void               * pos;
 
     avail = evbuffer_get_length(bufferevent_get_input(bev));
 
@@ -1462,6 +1497,21 @@ _evhtp_connection_readcb(evbev_t * bev, void * arg) {
     }
 
     buf = evbuffer_pullup(bufferevent_get_input(bev), avail);
+
+    /*
+     * If we have not yet received the entire header, copy all potential header
+     * data into the header buffer.  Scan the received data for the end of a
+     * header to avoid unecessarily copying the body (which could be large).
+     */
+    if (c->header_complete == 0) {
+        pos = memmem(buf, avail, END_OF_HEADER, END_OF_HEADER_LEN);
+
+        if (pos != NULL) {
+            evbuffer_add(c->header_buffer_in, buf, (pos + END_OF_HEADER_LEN - buf));
+        } else {
+            evbuffer_add(c->header_buffer_in, buf, avail);
+        }
+    }
 
     bufferevent_disable(bev, EV_WRITE);
     {
@@ -1535,6 +1585,9 @@ _evhtp_connection_writecb(evbev_t * bev, void * arg) {
 
         c->request         = NULL;
         c->body_bytes_read = 0;
+        c->header_complete = 0;
+        evbuffer_free(c->header_buffer_in);
+        c->header_buffer_in = evbuffer_new();
 
         if (c->htp->parent && c->vhost_via_sni == 0) {
             /* this request was servied by a virtual host evhtp_t structure
@@ -1722,13 +1775,15 @@ _evhtp_connection_new(evhtp_t * htp, evutil_socket_t sock, evhtp_type type) {
         return NULL;
     }
 
-    connection->error  = 0;
-    connection->owner  = 1;
-    connection->paused = 0;
-    connection->sock   = sock;
-    connection->htp    = htp;
-    connection->type   = type;
-    connection->parser = htparser_new();
+    connection->error            = 0;
+    connection->owner            = 1;
+    connection->paused           = 0;
+    connection->sock             = sock;
+    connection->htp              = htp;
+    connection->type             = type;
+    connection->parser           = htparser_new();
+    connection->header_buffer_in = evbuffer_new();
+    connection->header_complete  = 0;
 
     htparser_init(connection->parser, ptype);
     htparser_set_userdata(connection->parser, connection);
@@ -3475,6 +3530,10 @@ evhtp_connection_free(evhtp_connection_t * connection) {
 
     if (connection->ratelimit_cfg != NULL) {
         ev_token_bucket_cfg_free(connection->ratelimit_cfg);
+    }
+
+    if (connection->header_buffer_in != NULL) {
+        evbuffer_free(connection->header_buffer_in);
     }
 
     free(connection);
