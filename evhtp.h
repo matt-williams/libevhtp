@@ -737,6 +737,17 @@ void evhtp_send_reply_chunk(evhtp_request_t * request, evbuf_t * buf);
 void evhtp_send_reply_chunk_end(evhtp_request_t * request);
 
 /**
+ * @brief Build the header for a the response to a given request.
+ *
+ * @param request         The request in question.
+ * @param code            The status code for the response.
+ * @param header_buffer   The buffer to write the header into.
+ *
+ * @return 0 on success, -1 on failure.
+ */
+int evhtp_get_response_header(evhtp_request_t * request, evhtp_res code, evbuf_t * header_buffer);
+
+/**
  * @brief creates a new evhtp_callback_t structure.
  *
  * All callbacks are stored in this structure

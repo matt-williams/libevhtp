@@ -1451,10 +1451,6 @@ check_proto:
     evhtp_headers_for_each(request->headers_out, _evhtp_create_headers, buf);
     evbuffer_add(buf, "\r\n", 2);
 
-    if (evbuffer_get_length(request->buffer_out)) {
-        evbuffer_add_buffer(buf, request->buffer_out);
-    }
-
     return buf;
 }     /* _evhtp_create_reply */
 
@@ -2608,6 +2604,10 @@ evhtp_send_reply_start(evhtp_request_t * request, evhtp_res code) {
         return;
     }
 
+    if (evbuffer_get_length(request->buffer_out)) {
+        evbuffer_add_buffer(reply_buf, request->buffer_out);
+    }
+
     bufferevent_write_buffer(c->bev, reply_buf);
     evbuffer_free(reply_buf);
 }
@@ -2640,6 +2640,10 @@ evhtp_send_reply(evhtp_request_t * request, evhtp_res code) {
     if (!(reply_buf = _evhtp_create_reply(request, code))) {
         evhtp_connection_free(request->conn);
         return;
+    }
+
+    if (evbuffer_get_length(request->buffer_out)) {
+        evbuffer_add_buffer(reply_buf, request->buffer_out);
     }
 
     bufferevent_write_buffer(evhtp_connection_get_bev(c), reply_buf);
@@ -2751,6 +2755,23 @@ evhtp_send_reply_chunk_end(evhtp_request_t * request) {
     }
 
     evhtp_send_reply_end(request);
+}
+
+int
+evhtp_get_response_header(evhtp_request_t * request, evhtp_res code, evbuf_t * header_buffer) {
+    evbuf_t * buf;
+    int       rc = 0;
+
+    if (!(buf = _evhtp_create_reply(request, code))) {
+        return -1;
+    }
+
+    if (evbuffer_add_buffer(header_buffer, buf) != 0) {
+        rc = -1;
+    }
+
+    evbuffer_free(buf);
+    return rc;
 }
 
 void
