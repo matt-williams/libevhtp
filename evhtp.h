@@ -737,7 +737,9 @@ void evhtp_send_reply_chunk(evhtp_request_t * request, evbuf_t * buf);
 void evhtp_send_reply_chunk_end(evhtp_request_t * request);
 
 /**
- * @brief Build the header for a the response to a given request.
+ * @brief Build the header for the response to a given request. This includes
+ * everything up to and including the body (the start line, all header lines,
+ * and the final CRLF).
  *
  * @param request         The request in question.
  * @param code            The status code for the response.
