@@ -387,23 +387,24 @@ struct evhtp_path_s {
  * @brief a structure containing all information for a http request.
  */
 struct evhtp_request_s {
-    evhtp_t            * htp;         /**< the parent evhtp_t structure */
-    evhtp_connection_t * conn;        /**< the associated connection */
-    evhtp_hooks_t      * hooks;       /**< request specific hooks */
-    evhtp_uri_t        * uri;         /**< request URI information */
-    evbuf_t            * buffer_in;   /**< buffer containing data from client */
-    evbuf_t            * buffer_out;  /**< buffer containing data to client */
-    evhtp_headers_t    * headers_in;  /**< headers from client */
-    evhtp_headers_t    * headers_out; /**< headers to client */
-    evhtp_proto          proto;       /**< HTTP protocol used */
-    htp_method           method;      /**< HTTP method used */
-    evhtp_res            status;      /**< The HTTP response code or other error conditions */
-    int                  keepalive;   /**< set to 1 if the connection is keep-alive */
-    int                  finished;    /**< set to 1 if the request is fully processed */
-    int                  chunked;     /**< set to 1 if the request is chunked */
+    evhtp_t            * htp;                /**< the parent evhtp_t structure */
+    evhtp_connection_t * conn;               /**< the associated connection */
+    evhtp_hooks_t      * hooks;              /**< request specific hooks */
+    evhtp_uri_t        * uri;                /**< request URI information */
+    evbuf_t            * header_buffer_in;   /**< buffer containing headers from client */
+    evbuf_t            * buffer_in;          /**< buffer containing data from client */
+    evbuf_t            * buffer_out;         /**< buffer containing data to client */
+    evhtp_headers_t    * headers_in;         /**< headers from client */
+    evhtp_headers_t    * headers_out;        /**< headers to client */
+    evhtp_proto          proto;              /**< HTTP protocol used */
+    htp_method           method;             /**< HTTP method used */
+    evhtp_res            status;             /**< The HTTP response code or other error conditions */
+    int                  keepalive;          /**< set to 1 if the connection is keep-alive */
+    int                  finished;           /**< set to 1 if the request is fully processed */
+    int                  chunked;            /**< set to 1 if the request is chunked */
 
-    evhtp_callback_cb cb;             /**< the function to call when fully processed */
-    void            * cbarg;          /**< argument which is passed to the cb function */
+    evhtp_callback_cb cb;                    /**< the function to call when fully processed */
+    void            * cbarg;                 /**< argument which is passed to the cb function */
     int               error;
 
     TAILQ_ENTRY(evhtp_request_s) next;
@@ -421,22 +422,24 @@ struct evhtp_connection_s {
     htparser                   * parser;
     event_t                    * resume_ev;
     struct sockaddr            * saddr;
-    struct timeval               recv_timeo;    /**< conn read timeouts (overrides global) */
-    struct timeval               send_timeo;    /**< conn write timeouts (overrides global) */
+    struct timeval               recv_timeo;       /**< conn read timeouts (overrides global) */
+    struct timeval               send_timeo;       /**< conn write timeouts (overrides global) */
     evutil_socket_t              sock;
     uint8_t                      error;
-    uint8_t                      owner;         /**< set to 1 if this structure owns the bufferevent */
-    uint8_t                      vhost_via_sni; /**< set to 1 if the vhost was found via SSL SNI */
-    evhtp_request_t            * request;       /**< the request currently being processed */
+    uint8_t                      owner;            /**< set to 1 if this structure owns the bufferevent */
+    uint8_t                      vhost_via_sni;    /**< set to 1 if the vhost was found via SSL SNI */
+    evhtp_request_t            * request;          /**< the request currently being processed */
     uint64_t                     max_body_size;
     uint64_t                     body_bytes_read;
     uint64_t                     num_requests;
-    evhtp_type                   type;          /**< server or client */
+    evhtp_type                   type;             /**< server or client */
     char                         paused;
     char                         free_connection;
-    struct ev_token_bucket_cfg * ratelimit_cfg; /**< connection-specific ratelimiting configuration. */
+    struct ev_token_bucket_cfg * ratelimit_cfg;    /**< connection-specific ratelimiting configuration. */
+    evbuf_t                    * header_buffer_in; /**< header data received for the current request. */
+    int                          header_complete;  /**< whether the header for the current request is complete. */
 
-    TAILQ_HEAD(, evhtp_request_s) pending;      /**< client pending data */
+    TAILQ_HEAD(, evhtp_request_s) pending;         /**< client pending data */
 };
 
 struct evhtp_hooks_s {
@@ -732,6 +735,19 @@ void evhtp_send_reply_chunk(evhtp_request_t * request, evbuf_t * buf);
  * @param request
  */
 void evhtp_send_reply_chunk_end(evhtp_request_t * request);
+
+/**
+ * @brief Build the header for the response to a given request. This includes
+ * everything up to and including the body (the start line, all header lines,
+ * and the final CRLF).
+ *
+ * @param request         The request in question.
+ * @param code            The status code for the response.
+ * @param header_buffer   The buffer to write the header into.
+ *
+ * @return 0 on success, -1 on failure.
+ */
+int evhtp_get_response_header(evhtp_request_t * request, evhtp_res code, evbuf_t * header_buffer);
 
 /**
  * @brief creates a new evhtp_callback_t structure.
@@ -1073,6 +1089,28 @@ void evhtp_set_max_keepalive_requests(evhtp_t * htp, uint64_t num);
  */
 int evhtp_connection_set_ratelimit(evhtp_connection_t * c, size_t read_rate,
     size_t read_burst, size_t write_rate, size_t write_burst, const struct timeval * tick);
+
+/**
+ * @brief Get a connection's remote IP address and port.
+ *
+ * @param conn   The connection in question.
+ * @param ip     Pointer to a buffer to store the IP address.
+ * @param len    Length of the IP address buffer.
+ * @param port   Pointer to where to store the port.
+ *
+ */
+int evhtp_get_remote_ip_port(evhtp_connection_t * conn, char * ip, size_t len, unsigned short * port);
+
+/**
+ * @brief Get a connection's local IP address and port.
+ *
+ * @param conn   The connection in question.
+ * @param ip     Pointer to a buffer to store the IP address.
+ * @param len    Length of the IP address buffer.
+ * @param port   Pointer to where to store the port.
+ *
+ */
+int evhtp_get_local_ip_port(evhtp_connection_t * conn, char * ip, size_t len, unsigned short * port);
 
 /*****************************************************************
 * client request functions                                      *
