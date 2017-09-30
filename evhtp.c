@@ -1841,8 +1841,8 @@ _evhtp_run_in_thread(evthr_t * thr, void * arg, void * shared) {
 
 #endif
 
-static void
-_evhtp_accept_cb(evserv_t * serv, int fd, struct sockaddr * s, int sl, void * arg) {
+void
+evhtp_accept_cb(evserv_t * serv, int fd, struct sockaddr * s, int sl, void * arg) {
     evhtp_t            * htp = arg;
     evhtp_connection_t * connection;
 
@@ -2786,7 +2786,7 @@ evhtp_bind_sockaddr(evhtp_t * htp, struct sockaddr * sa, size_t sin_len, int bac
     signal(SIGPIPE, SIG_IGN);
 #endif
 
-    htp->server = evconnlistener_new_bind(htp->evbase, _evhtp_accept_cb, (void *)htp,
+    htp->server = evconnlistener_new_bind(htp->evbase, evhtp_accept_cb, (void *)htp,
                                           LEV_OPT_THREADSAFE | LEV_OPT_CLOSE_ON_FREE | LEV_OPT_REUSEABLE,
                                           backlog, sa, sin_len);
     if (!htp->server) {
