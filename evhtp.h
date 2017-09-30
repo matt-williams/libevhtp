@@ -694,6 +694,7 @@ void evhtp_unbind_socket(evhtp_t * htp);
  */
 int  evhtp_bind_sockaddr(evhtp_t * htp, struct sockaddr *, size_t sin_len, int backlog);
 
+void evhtp_accept_cb(evserv_t * serv, int fd, struct sockaddr * s, int sl, void * arg);
 int  evhtp_use_threads(evhtp_t * htp, evhtp_thread_init_cb init_cb, int nthreads, void * arg);
 void evhtp_send_reply(evhtp_request_t * request, evhtp_res code);
 void evhtp_send_reply_start(evhtp_request_t * request, evhtp_res code);
